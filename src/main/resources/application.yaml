@@ -1,1 +1,11 @@
+app:
+  limit-message: 10
 
+baseUrl:
+  #  es: http://localhost:9200
+  es: localhost:9200
+
+#spring:
+#  jackson:
+#    serialization:
+#      FAIL_ON_EMPTY_BEANS: false
