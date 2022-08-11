@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import ru.pugart.messag.eservice.config.AppConfig;
 import ru.pugart.messag.eservice.dto.ChatDto;
 import ru.pugart.messag.eservice.entity.Chat;
 import ru.pugart.messag.eservice.repository.MessageRepository;
@@ -21,8 +22,8 @@ import java.util.stream.Collectors;
 public class MessageService implements MessageApi {
 
     private final static String MESSAGE_FORMAT = "%s;%s;%s";
-    private final static Integer MESSAGE_LIMIT = 10;
 
+    private final AppConfig appConfig;
     private final MessageRepository messageRepository;
 
     @Override
@@ -49,7 +50,7 @@ public class MessageService implements MessageApi {
                     chat.getMessages().add(String.format(MESSAGE_FORMAT, ownerId, now, message));
                     chat.setMessageCount(chat.getMessageCount() + 1);
 
-                    if(chat.getMessageCount() >= MESSAGE_LIMIT){
+                    if(chat.getMessageCount() >= appConfig.getLimitMessage()){
                         chat.setArchived(true);
                     }
 

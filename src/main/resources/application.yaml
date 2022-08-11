@@ -1,11 +1,5 @@
 app:
-  limit-message: 10
+  limit-message: ${MESSAGE_SERVICE_LIMIT_MESSAGE:10}
 
 baseUrl:
-  #  es: http://localhost:9200
-  es: localhost:9200
-
-#spring:
-#  jackson:
-#    serialization:
-#      FAIL_ON_EMPTY_BEANS: false
+  es: ${ES_URL:localhost:9200}
