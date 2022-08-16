@@ -27,7 +27,7 @@ public class MessageService implements MessageApi {
     private final MessageRepository messageRepository;
 
     @Override
-    public Mono<Chat> createOrUpdateChat(String ownerId, String chatPartnerId, String message) {
+    public Mono<ChatDto> createOrUpdateChat(String ownerId, String chatPartnerId, String message) {
         return messageRepository.findAllByOwnerIdAndChatPartnerIdAndArchived(ownerId, chatPartnerId, false)
                 .log()
                 .switchIfEmpty(messageRepository.findAllByOwnerIdAndChatPartnerIdAndArchived(chatPartnerId, ownerId, false))
@@ -61,14 +61,17 @@ public class MessageService implements MessageApi {
                 .flatMap(chat -> {
                     if(chat.getArchived()) {
                         return messageRepository.save(Chat.builder()
-                                .ownerId(chat.getOwnerId())
-                                .chatPartnerId(chat.getChatPartnerId())
-                                .created(Instant.now())
-                                .messageCount(0)
-                                .archived(false)
-                                .build());
+                                    .ownerId(chat.getOwnerId())
+                                    .chatPartnerId(chat.getChatPartnerId())
+                                    .created(Instant.now())
+                                    .messageCount(0)
+                                    .archived(false)
+                                    .build())
+                                // convert to dto
+                                .flatMap(ch -> Mono.just(convertToDto(ch)))
+                                .switchIfEmpty(Mono.error(new RuntimeException("oops!")));
                     }
-                    return Mono.just(chat);
+                    return Mono.just(convertToDto(chat));
                 });
     }
 

@@ -19,7 +19,7 @@ public class Controller implements MessageApi {
 
     @Override
     @PostMapping(value = "create-or-update")
-    public Mono<Chat> createOrUpdateChat(@RequestParam String ownerId, @RequestParam String chatPartnerId, @RequestParam String message) {
+    public Mono<ChatDto> createOrUpdateChat(@RequestParam String ownerId, @RequestParam String chatPartnerId, @RequestParam String message) {
         return messageService.createOrUpdateChat(ownerId, chatPartnerId, message);
     }
 
