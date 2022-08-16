@@ -25,8 +25,8 @@ public class Controller implements MessageApi {
 
     @Override
     @GetMapping(value = "remove")
-    public void removeChat(@RequestParam String ownerId, @RequestParam String chatId) {
-        messageService.removeChat(ownerId, chatId);
+    public Mono<Void> removeChat(@RequestParam String ownerId, @RequestParam String chatPartnerId) {
+        return messageService.removeChat(ownerId, chatPartnerId);
     }
 
     @Override

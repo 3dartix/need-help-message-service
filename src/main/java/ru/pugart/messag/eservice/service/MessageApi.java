@@ -7,7 +7,7 @@ import ru.pugart.messag.eservice.entity.Chat;
 
 public interface MessageApi {
     Mono<Chat> createOrUpdateChat(String ownerId, String chatPartnerId, String message);
-    void removeChat(String ownerId, String chatId);
+    Mono<Void> removeChat(String ownerId, String chatPartnerId);
     Mono<ChatDto> getMessages(String ownerId, String chatPartnerId);
     Flux<ChatDto> getChats(String ownerId);
 }

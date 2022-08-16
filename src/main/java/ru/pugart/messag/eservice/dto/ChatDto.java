@@ -14,6 +14,7 @@ import java.util.List;
 @NoArgsConstructor
 @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
 public class ChatDto {
+    private String chatId;
     private String ownerId;
     private String chatPartnerId;
     private List<Message> messages;

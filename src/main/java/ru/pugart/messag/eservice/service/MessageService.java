@@ -73,19 +73,36 @@ public class MessageService implements MessageApi {
     }
 
     @Override
-    public void removeChat(String ownerId, String chatId) {
-        messageRepository.deleteByChatIdAndOwnerId(chatId, ownerId);
+    public Mono<Void> removeChat(String ownerId, String chatPartnerId) {
+        return Flux.merge(
+                    messageRepository.findAllByOwnerIdAndChatPartnerId(ownerId, chatPartnerId),
+                    messageRepository.findAllByOwnerIdAndChatPartnerId(chatPartnerId, ownerId)
+                )
+                .log()
+                .flatMap(chat -> messageRepository.deleteById(chat.getChatId()))
+                .then();
     }
 
     @Override
     public Mono<ChatDto> getMessages(String ownerId, String chatPartnerId) {
-        return messageRepository.findAllByOwnerIdAndChatPartnerId(ownerId, chatPartnerId)
+        return Flux.merge(
+                    messageRepository.findAllByOwnerIdAndChatPartnerId(ownerId, chatPartnerId),
+                    messageRepository.findAllByOwnerIdAndChatPartnerId(chatPartnerId, ownerId)
+                )
                 .log()
                 .switchIfEmpty(Flux.empty())
                 .collectList()
                 .flatMap(chats -> {
                     List<String> messageTextList = new ArrayList<>();
-                    chats.forEach(c -> messageTextList.addAll(c.getMessages()));
+                    chats.forEach(c -> {
+                        if(c.getMessages() != null) {
+                            messageTextList.addAll(c.getMessages());
+                        }
+                    });
+
+                    if(messageTextList.isEmpty()){
+                        return Mono.empty();
+                    }
 
                     ChatDto chatDto = ChatDto.builder()
                             .ownerId(ownerId)
@@ -110,6 +127,7 @@ public class MessageService implements MessageApi {
 
     private ChatDto convertToDto(Chat chat){
         return ChatDto.builder()
+                .chatId(chat.getChatId())
                 .ownerId(chat.getOwnerId())
                 .chatPartnerId(chat.getChatPartnerId())
                 .messages(convertTextToMessage(chat.getMessages()))
