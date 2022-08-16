@@ -6,7 +6,6 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.pugart.messag.eservice.dto.ChatDto;
-import ru.pugart.messag.eservice.entity.Chat;
 import ru.pugart.messag.eservice.service.MessageApi;
 import ru.pugart.messag.eservice.service.MessageService;
 
@@ -27,6 +26,12 @@ public class Controller implements MessageApi {
     @GetMapping(value = "remove")
     public Mono<Void> removeChat(@RequestParam String ownerId, @RequestParam String chatPartnerId) {
         return messageService.removeChat(ownerId, chatPartnerId);
+    }
+
+    @Override
+    @GetMapping(value = "mark-as-read")
+    public Flux<ChatDto> markAsRead(String ownerId, String chatPartnerId) {
+        return messageService.markAsRead(ownerId, chatPartnerId);
     }
 
     @Override

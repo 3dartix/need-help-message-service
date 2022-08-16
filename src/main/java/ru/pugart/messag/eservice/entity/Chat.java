@@ -38,4 +38,7 @@ public class Chat {
 
     @Field(type = FieldType.Boolean, name = "archived")
     private Boolean archived;
+
+    @Field(type = FieldType.Boolean, name = "read")
+    private Boolean read;
 }

@@ -20,7 +20,11 @@ import java.util.stream.Collectors;
 @AllArgsConstructor
 @Slf4j
 public class MessageService implements MessageApi {
-
+    /**
+     * %s - owner number (string)
+     * %s - time (instant)
+     * %s - message (string)
+     */
     private final static String MESSAGE_FORMAT = "%s;%s;%s";
 
     private final AppConfig appConfig;
@@ -38,6 +42,7 @@ public class MessageService implements MessageApi {
                                 .created(Instant.now())
                                 .messageCount(0)
                                 .archived(false)
+                                .read(false)
                                 .build())
                 )
                 .log()
@@ -66,6 +71,7 @@ public class MessageService implements MessageApi {
                                     .created(Instant.now())
                                     .messageCount(0)
                                     .archived(false)
+                                    .read(false)
                                     .build())
                                 // convert to dto
                                 .flatMap(ch -> Mono.just(convertToDto(ch)))
@@ -84,6 +90,24 @@ public class MessageService implements MessageApi {
                 .log()
                 .flatMap(chat -> messageRepository.deleteById(chat.getChatId()))
                 .then();
+    }
+
+    @Override
+    public Flux<ChatDto> markAsRead(String ownerId, String chatPartnerId) {
+        return Flux.merge(
+                    messageRepository.findAllByOwnerIdAndChatPartnerId(ownerId, chatPartnerId),
+                    messageRepository.findAllByOwnerIdAndChatPartnerId(chatPartnerId, ownerId)
+                )
+                .log()
+                .flatMap(chat -> {
+                    //todo fix ReSave
+                    chat.setRead(true);
+                    return messageRepository.save(chat)
+                            .log()
+                            .flatMapMany(ch -> Flux.just(convertToDto(ch)))
+                            .switchIfEmpty(Flux.empty());
+                })
+                .switchIfEmpty(Flux.empty());
     }
 
     @Override
@@ -133,6 +157,7 @@ public class MessageService implements MessageApi {
                 .chatId(chat.getChatId())
                 .ownerId(chat.getOwnerId())
                 .chatPartnerId(chat.getChatPartnerId())
+                .read(chat.getRead())
                 .messages(convertTextToMessage(chat.getMessages()))
                 .build();
     }

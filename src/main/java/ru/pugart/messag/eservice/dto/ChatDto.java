@@ -16,6 +16,7 @@ import java.util.List;
 public class ChatDto {
     private String chatId;
     private String ownerId;
+    private Boolean read;
     private String chatPartnerId;
     private List<Message> messages;
 
