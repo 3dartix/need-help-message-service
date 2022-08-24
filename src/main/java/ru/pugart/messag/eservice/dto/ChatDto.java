@@ -12,12 +12,12 @@ import java.util.List;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
+//@JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
+@Data
 public class ChatDto {
-    private String chatId;
-    private String ownerId;
-    private Boolean read;
-    private String chatPartnerId;
+    private String name;
+    private String chatCode;
+    private List<ReadMarkDto> readMarkList;
     private List<Message> messages;
 
     @Data
@@ -35,5 +35,13 @@ public class ChatDto {
             this.time = Instant.parse(splitText[1]);
             this.message = splitText[2];
         }
+    }
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class ReadMarkDto {
+        private Boolean read;
+        private String member;
     }
 }

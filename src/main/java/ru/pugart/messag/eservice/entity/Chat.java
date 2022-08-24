@@ -19,13 +19,7 @@ import java.util.List;
 @NoArgsConstructor
 public class Chat {
     @Id
-    private String chatId;
-
-    @Field(type = FieldType.Text, name = "owner_id")
-    private String ownerId;
-
-    @Field(type = FieldType.Text, name = "chat_partner_id")
-    private String chatPartnerId;
+    private String id;
 
     @Field(type = FieldType.Text, name = "message_count")
     private Integer messageCount;
@@ -39,6 +33,27 @@ public class Chat {
     @Field(type = FieldType.Boolean, name = "archived")
     private Boolean archived;
 
-    @Field(type = FieldType.Boolean, name = "read")
-    private Boolean read;
+    @Field(type = FieldType.Object, name = "read_mark_list")
+    private List<ReadMark> readMarkList;
+
+    @Field(type = FieldType.Text, name = "members")
+    private List<String> members;
+
+    @Field(type = FieldType.Text, name = "name")
+    private String name;
+
+    @Field(type = FieldType.Text, name = "task_id")
+    private String taskId;
+
+    @Field(type = FieldType.Text, name = "previous_chat_id")
+    private String chatCode;
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Builder
+    public static class ReadMark {
+        private Boolean read;
+        private String member;
+    }
 }

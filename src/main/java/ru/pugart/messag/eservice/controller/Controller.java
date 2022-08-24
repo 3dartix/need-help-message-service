@@ -9,6 +9,8 @@ import ru.pugart.messag.eservice.dto.ChatDto;
 import ru.pugart.messag.eservice.service.MessageApi;
 import ru.pugart.messag.eservice.service.MessageService;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/chat")
 @AllArgsConstructor
@@ -17,32 +19,40 @@ public class Controller implements MessageApi {
     private final MessageService messageService;
 
     @Override
-    @PostMapping(value = "create-or-update")
-    public Mono<ChatDto> createOrUpdateChat(@RequestParam String ownerId, @RequestParam String chatPartnerId, @RequestParam String message) {
-        return messageService.createOrUpdateChat(ownerId, chatPartnerId, message);
+    @PostMapping(value = "create")
+    public Mono<ChatDto> createOrFindChat(@RequestParam String taskId,
+                                          @RequestParam String name,
+                                          @RequestParam List<String> members) {
+        return messageService.createOrFindChat(taskId, name, members);
+    }
+
+    @Override
+    @PostMapping(value = "update")
+    public Mono<ChatDto> updateChat(@RequestParam String chatCode, @RequestParam String authorId, @RequestBody String message) {
+        return messageService.updateChat(chatCode, authorId, message);
     }
 
     @Override
     @GetMapping(value = "remove")
-    public Mono<Void> removeChat(@RequestParam String ownerId, @RequestParam String chatPartnerId) {
-        return messageService.removeChat(ownerId, chatPartnerId);
+    public Mono<Void> removeChat(@RequestParam String chatId, @RequestParam String authorId) {
+        return messageService.removeChat(chatId, authorId);
     }
 
     @Override
     @GetMapping(value = "mark-as-read")
-    public Flux<ChatDto> markAsRead(String ownerId, String chatPartnerId) {
-        return messageService.markAsRead(ownerId, chatPartnerId);
+    public Mono<ChatDto> markAsRead(String chatCode, String authorId) {
+        return messageService.markAsRead(chatCode, authorId);
     }
 
     @Override
     @GetMapping(value = "messages")
-    public Mono<ChatDto> getMessages(@RequestParam String ownerId, @RequestParam String chatPartnerId) {
-        return messageService.getMessages(ownerId, chatPartnerId);
+    public Mono<ChatDto> getMessages(@RequestParam String chatCode, @RequestParam String authorId) {
+        return messageService.getMessages(chatCode, authorId);
     }
 
     @Override
     @GetMapping(value = "find-all")
-    public Flux<ChatDto> getChats(@RequestParam String ownerId) {
-        return messageService.getChats(ownerId);
+    public Flux<ChatDto> getChats(@RequestParam String authorId) {
+        return messageService.getChats(authorId);
     }
 }

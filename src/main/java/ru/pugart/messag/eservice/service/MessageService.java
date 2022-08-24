@@ -11,9 +11,7 @@ import ru.pugart.messag.eservice.entity.Chat;
 import ru.pugart.messag.eservice.repository.MessageRepository;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -30,30 +28,64 @@ public class MessageService implements MessageApi {
     private final AppConfig appConfig;
     private final MessageRepository messageRepository;
 
-    @Override
-    public Mono<ChatDto> createOrUpdateChat(String ownerId, String chatPartnerId, String message) {
-        return messageRepository.findAllByOwnerIdAndChatPartnerIdAndArchived(ownerId, chatPartnerId, false)
-                .log()
-                .switchIfEmpty(messageRepository.findAllByOwnerIdAndChatPartnerIdAndArchived(chatPartnerId, ownerId, false))
-                .switchIfEmpty(
-                        Mono.just(Chat.builder()
-                                .ownerId(ownerId)
-                                .chatPartnerId(chatPartnerId)
-                                .created(Instant.now())
-                                .messageCount(0)
-                                .archived(false)
-                                .read(false)
-                                .build())
-                )
-                .log()
-                .flatMap(chat -> {
-                    if(chat.getMessages() == null) {
-                        chat.setMessages(new ArrayList<>());
-                    }
+    public Mono<Chat> findChat(String taskId, List<String> members, Boolean archived) {
+        if(archived == null) {
+            return messageRepository.findChatByTaskIdAndMembersIs(taskId, members)
+                    .log()
+                    .switchIfEmpty(Mono.empty());
+        }
 
-                    Instant now = Instant.now();
-                    chat.getMessages().add(String.format(MESSAGE_FORMAT, ownerId, now, message));
+        return messageRepository.findChatByArchivedAndTaskIdAndMembersIs(archived, taskId, members)
+                .log()
+                .switchIfEmpty(Mono.empty());
+    }
+
+    @Override
+    public Mono<ChatDto> createOrFindChat(String taskId, String name, List<String> members) {
+        return findChat(taskId, members, false)
+                .switchIfEmpty(storeChat(taskId, name, members, null))
+                .flatMap(chat -> Mono.just(convertToDto(chat, null)))
+                .log()
+                .switchIfEmpty(Mono.error(new RuntimeException("oops!")));
+    }
+
+    private Mono<Chat> storeChat(String taskId, String name, List<String> members, String previousChatCode) {
+        String chatCode = previousChatCode == null ? java.util.UUID.randomUUID().toString() : previousChatCode;
+
+        List<Chat.ReadMark> readMarkList = members.stream()
+                .map(member -> Chat.ReadMark.builder().member(member).read(true).build())
+                .collect(Collectors.toList());
+
+        return messageRepository.save(Chat.builder()
+                .name(name)
+                .members(members)
+                .taskId(taskId)
+                .created(Instant.now())
+                .messageCount(0)
+                .archived(false)
+                .readMarkList(readMarkList)
+                .messages(new ArrayList<>())
+                .chatCode(chatCode)
+                .build());
+    }
+
+    @Override
+    public Mono<ChatDto> updateChat(String chatCode, String authorId, String message) {
+        return messageRepository.findByChatCodeAndArchived(chatCode, false)
+                .log()
+                .switchIfEmpty(Mono.error(new RuntimeException(String.format("oops! chat with params=[chatCode:%s] not found", chatCode))))
+                .filter(chat -> chat.getMembers().contains(authorId))
+                .switchIfEmpty(Mono.error(new RuntimeException(String.format("forbidden! author=[%s] not found in members this chat", authorId))))
+                .flatMap(chat -> {
+                    chat.getMessages().add(String.format(MESSAGE_FORMAT, authorId, Instant.now(), message));
                     chat.setMessageCount(chat.getMessageCount() + 1);
+
+                    chat.getReadMarkList().forEach(readMark -> {
+                        // if member not equals author = false
+                        if(!readMark.getMember().equals(authorId)){
+                            readMark.setRead(false);
+                        }
+                    });
 
                     if(chat.getMessageCount() >= appConfig.getLimitMessage()){
                         chat.setArchived(true);
@@ -62,62 +94,66 @@ public class MessageService implements MessageApi {
                     log.info("prepared chat: {}", chat);
                     return messageRepository.save(chat);
                 })
-                .switchIfEmpty(Mono.error(new RuntimeException("oops!")))
+                .switchIfEmpty(Mono.error(new RuntimeException("oops, something is wrong!")))
                 .flatMap(chat -> {
                     if(chat.getArchived()) {
-                        return messageRepository.save(Chat.builder()
-                                    .ownerId(chat.getOwnerId())
-                                    .chatPartnerId(chat.getChatPartnerId())
-                                    .created(Instant.now())
-                                    .messageCount(0)
-                                    .archived(false)
-                                    .read(false)
-                                    .build())
+                        // if limit is over
+                        return storeChat(chat.getTaskId(), chat.getName(), chat.getMembers(), chat.getChatCode())
                                 // convert to dto
-                                .flatMap(ch -> Mono.just(convertToDto(ch)))
+                                .flatMap(ch -> Mono.just(convertToDto(ch, authorId)))
                                 .switchIfEmpty(Mono.error(new RuntimeException("oops!")));
                     }
-                    return Mono.just(convertToDto(chat));
+                    return Mono.just(convertToDto(chat, authorId));
                 });
     }
 
     @Override
-    public Mono<Void> removeChat(String ownerId, String chatPartnerId) {
-        return Flux.merge(
-                    messageRepository.findAllByOwnerIdAndChatPartnerId(ownerId, chatPartnerId),
-                    messageRepository.findAllByOwnerIdAndChatPartnerId(chatPartnerId, ownerId)
-                )
-                .log()
-                .flatMap(chat -> messageRepository.deleteById(chat.getChatId()))
+    public Mono<Void> removeChat(String chatCode, String authorId) {
+        return messageRepository.deleteChatByChatCodeAndMembersIs(chatCode, Collections.singletonList(authorId))
                 .then();
     }
 
     @Override
-    public Flux<ChatDto> markAsRead(String ownerId, String chatPartnerId) {
-        return Flux.merge(
-                    messageRepository.findAllByOwnerIdAndChatPartnerId(ownerId, chatPartnerId),
-                    messageRepository.findAllByOwnerIdAndChatPartnerId(chatPartnerId, ownerId)
-                )
+    public Mono<ChatDto> markAsRead(String chatCode, String authorId) {
+        return messageRepository.findByChatCodeAndArchived(chatCode, false)
+                .switchIfEmpty(Mono.error(new RuntimeException(String.format("oops! chatCode with id=%s not found", chatCode))))
+                .filter(chat -> chat.getMembers().contains(authorId))
+                .switchIfEmpty(Mono.error(new RuntimeException("oops! transaction forbidden")))
                 .log()
                 .flatMap(chat -> {
-                    //todo fix ReSave
-                    chat.setRead(true);
+
+                    chat.getReadMarkList().forEach(readMark -> {
+                        if(readMark.getMember().equals(authorId)){
+                            readMark.setRead(true);
+                        }
+                    });
+
                     return messageRepository.save(chat)
                             .log()
-                            .flatMapMany(ch -> Flux.just(convertToDto(ch)))
-                            .switchIfEmpty(Flux.empty());
+                            .flatMap(ch -> Mono.just(convertToDto(ch, authorId)))
+                            .switchIfEmpty(Mono.empty());
                 })
-                .switchIfEmpty(Flux.empty());
+                .switchIfEmpty(Mono.empty());
     }
 
     @Override
-    public Mono<ChatDto> getMessages(String ownerId, String chatPartnerId) {
-        return Flux.merge(
-                    messageRepository.findAllByOwnerIdAndChatPartnerId(ownerId, chatPartnerId),
-                    messageRepository.findAllByOwnerIdAndChatPartnerId(chatPartnerId, ownerId)
-                )
+    public Mono<ChatDto> getMessages(String chatCode, String authorId) {
+        return messageRepository.findChatByChatCode(chatCode)
+                .switchIfEmpty(Mono.error(new RuntimeException(String.format("oops! chatCode with id=%s not found", chatCode))))
+                .filter(chat -> chat.getMembers().contains(authorId))
+                .switchIfEmpty(Mono.error(new RuntimeException("oops! transaction forbidden")))
                 .log()
-                .switchIfEmpty(Flux.empty())
+                .flatMap(chat -> {
+                    //set read = true
+                    chat.getReadMarkList().forEach(readMark -> {
+                        if(readMark.getMember().equals(authorId)){
+                            readMark.setRead(true);
+                        }
+                    });
+
+                    log.info("updated chat: {}", chat);
+                    return messageRepository.save(chat);
+                })
                 .collectList()
                 .flatMap(chats -> {
                     List<String> messageTextList = new ArrayList<>();
@@ -131,11 +167,8 @@ public class MessageService implements MessageApi {
                         return Mono.empty();
                     }
 
-                    ChatDto chatDto = ChatDto.builder()
-                            .ownerId(ownerId)
-                            .chatPartnerId(chatPartnerId)
-                            .messages(convertTextToMessage(messageTextList))
-                            .build();
+                    ChatDto chatDto = convertToDto(chats.get(0), authorId);
+                    chatDto.setMessages(convertTextToMessage(messageTextList));
 
                     log.info("chatDto: {}", chatDto);
 
@@ -145,19 +178,26 @@ public class MessageService implements MessageApi {
     }
 
     @Override
-    public Flux<ChatDto> getChats(String ownerId) {
-        return messageRepository.findByOwnerIdOrChatPartnerId(ownerId, ownerId)
+    public Flux<ChatDto> getChats(String authorId) {
+        return messageRepository.findChatByArchivedAndMembersIn(false, Collections.singletonList(authorId))
                 .log()
-                .flatMap(chat -> Flux.just(convertToDto(chat)))
+                .flatMap(chat -> Flux.just(convertToDto(chat, authorId)))
                 .switchIfEmpty(Flux.empty());
     }
 
-    private ChatDto convertToDto(Chat chat){
+    private ChatDto convertToDto(Chat chat, String authorId){
+        ChatDto.ReadMarkDto readMarkDto = null;
+        if(authorId != null) {
+            Chat.ReadMark rm = chat.getReadMarkList().stream()
+                    .filter(readMark -> readMark.getMember().equals(authorId))
+                    .findFirst().get();
+            readMarkDto = new ChatDto.ReadMarkDto(rm.getRead(), rm.getMember());
+        }
+
         return ChatDto.builder()
-                .chatId(chat.getChatId())
-                .ownerId(chat.getOwnerId())
-                .chatPartnerId(chat.getChatPartnerId())
-                .read(chat.getRead())
+                .name(chat.getName())
+                .chatCode(chat.getChatCode())
+                .readMarkList(Collections.singletonList(readMarkDto))
                 .messages(convertTextToMessage(chat.getMessages()))
                 .build();
     }
